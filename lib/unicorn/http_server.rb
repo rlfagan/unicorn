@@ -489,7 +489,11 @@ class Unicorn::HttpServer
       next_sleep = 0
       logger.error "worker=#{worker.nr} PID:#{wpid} timeout " \
                    "(#{diff}s > #{@timeout}s), killing"
-      kill_worker(:KILL, wpid) # take no prisoners for timeout violations
+     kill_worker(:TERM, wpid)
+     fork do
+       sleep(0.5)
+       kill_worker(:KILL, wpid) # take no prisoners for timeout violations
+     end
     end
     next_sleep <= 0 ? 1 : next_sleep
   end
@@ -606,7 +610,7 @@ class Unicorn::HttpServer
   def init_worker_process(worker)
     worker.atfork_child
     # we'll re-trap :QUIT later for graceful shutdown iff we accept clients
-    EXIT_SIGS.each { |sig| trap(sig) { exit!(0) } }
+    EXIT_SIGS.each { |sig| trap(sig) { STDERR.puts(caller); exit!(0) } }
     exit!(0) if (SIG_QUEUE & EXIT_SIGS)[0]
     WORKER_QUEUE_SIGS.each { |sig| trap(sig, nil) }
     trap(:CHLD, 'DEFAULT')
