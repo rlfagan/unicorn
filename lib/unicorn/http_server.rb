@@ -474,26 +474,29 @@ class Unicorn::HttpServer
   end
 
   # forcibly terminate all workers that haven't checked in in timeout seconds.  The timeout is implemented using an unlinked File
+  # Workers will be killed with TERM first, so the backtrace can be printed, on
+  # the next call to murder_lazy_workers the worker will receive KILL.
   def murder_lazy_workers
     next_sleep = @timeout - 1
     now = Time.now.to_i
     WORKERS.dup.each_pair do |wpid, worker|
-      tick = worker.tick
-      0 == tick and next # skip workers that haven't processed any clients
-      diff = now - tick
-      tmp = @timeout - diff
-      if tmp >= 0
-        next_sleep > tmp and next_sleep = tmp
-        next
+      if worker.needs_sig_kill?
+        kill_worker(:KILL, wpid)
+      else
+        tick = worker.tick
+        0 == tick and next # skip workers that haven't processed any clients
+        diff = now - tick
+        tmp = @timeout - diff
+        if tmp >= 0
+          next_sleep > tmp and next_sleep = tmp
+          next
+        end
+        next_sleep = 0
+        logger.error "worker=#{worker.nr} PID:#{wpid} timeout " \
+                     "(#{diff}s > #{@timeout}s), killing"
+        kill_worker(:TERM, wpid)
+        worker.needs_sig_kill = true
       end
-      next_sleep = 0
-      logger.error "worker=#{worker.nr} PID:#{wpid} timeout " \
-                   "(#{diff}s > #{@timeout}s), killing"
-     kill_worker(:TERM, wpid)
-     fork do
-       sleep(0.5)
-       kill_worker(:KILL, wpid) # take no prisoners for timeout violations
-     end
     end
     next_sleep <= 0 ? 1 : next_sleep
   end

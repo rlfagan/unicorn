@@ -11,7 +11,7 @@ require "raindrops"
 class Unicorn::Worker
   # :stopdoc:
   attr_accessor :nr, :switched
-  attr_writer :tmp
+  attr_writer :tmp, :needs_sig_kill
   attr_reader :to_io # IO.select-compatible
 
   PER_DROP = Raindrops::PAGE_SIZE / Raindrops::SIZE
@@ -25,6 +25,7 @@ class Unicorn::Worker
     @nr = nr
     @tmp = @switched = false
     @to_io, @master = Unicorn.pipe
+    @needs_sig_kill = false
   end
 
   def atfork_child # :nodoc:
@@ -148,5 +149,9 @@ class Unicorn::Worker
     end
     Process.euid != uid and Process::UID.change_privilege(uid)
     @switched = true
+  end
+
+  def needs_sig_kill?
+    @needs_sig_kill
   end
 end
