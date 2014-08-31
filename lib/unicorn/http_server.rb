@@ -16,7 +16,8 @@ class Unicorn::HttpServer
                 :before_fork, :after_fork, :before_exec,
                 :listener_opts, :preload_app,
                 :reexec_pid, :orig_app, :init_listeners,
-                :master_pid, :config, :ready_pipe, :user
+                :master_pid, :config, :ready_pipe, :user,
+                :before_murder
 
   attr_reader :pid, :logger
   include Unicorn::SocketHelper
@@ -489,6 +490,7 @@ class Unicorn::HttpServer
       next_sleep = 0
       logger.error "worker=#{worker.nr} PID:#{wpid} timeout " \
                    "(#{diff}s > #{@timeout}s), killing"
+      before_murder.call(wpid) if before_murder
       kill_worker(:KILL, wpid) # take no prisoners for timeout violations
     end
     next_sleep <= 0 ? 1 : next_sleep
