@@ -15,10 +15,10 @@ class Unicorn::HttpServer
   attr_accessor :app, :timeout, :worker_processes,
                 :before_fork, :after_fork, :before_exec,
                 :listener_opts, :preload_app,
-                :orig_app, :config, :ready_pipe, :user
-
-  attr_writer   :after_worker_exit, :after_worker_ready, :worker_exec,
+                :orig_app, :config, :ready_pipe, :user,
                 :before_murder
+
+  attr_writer   :after_worker_exit, :after_worker_ready
 
   attr_reader :pid, :logger
   include Unicorn::SocketHelper
