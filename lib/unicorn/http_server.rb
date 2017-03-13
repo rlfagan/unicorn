@@ -578,7 +578,7 @@ class Unicorn::HttpServer
   def handle_error(client, e)
     code = case e
     when EOFError,Errno::ECONNRESET,Errno::EPIPE,Errno::ENOTCONN
-      Unicorn.log_error(@logger, "client disconnected", e.class.new)
+      @logger.warn "client disconnected"
       # client disconnected on us and there's nothing we can do
     when Unicorn::RequestURITooLongError
       414
