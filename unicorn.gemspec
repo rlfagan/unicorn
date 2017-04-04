@@ -10,8 +10,8 @@ test_files = manifest.grep(%r{\Atest/unit/test_.*\.rb\z}).map do |f|
 end.compact
 
 Gem::Specification.new do |s|
-  s.name = %q{unicorn}
-  s.version = (ENV['VERSION'] || '5.3.0.pre1').dup
+  s.name = %q{unicorn-shopify}
+  s.version = (ENV['VERSION'] || '5.3.0').dup
   s.authors = ['unicorn hackers']
   s.summary = 'Rack HTTP server for fast clients and Unix'
   s.description = File.read('README').split("\n\n")[1]
