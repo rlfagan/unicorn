@@ -3,11 +3,11 @@ require 'logger'
 
 # Implements a simple DSL for configuring a unicorn server.
 #
-# See https://bogomips.org/unicorn/examples/unicorn.conf.rb and
-# https://bogomips.org/unicorn/examples/unicorn.conf.minimal.rb
+# See https://yhbt.net/unicorn/examples/unicorn.conf.rb and
+# https://yhbt.net/unicorn/examples/unicorn.conf.minimal.rb
 # example configuration files.  An example config file for use with
 # nginx is also available at
-# https://bogomips.org/unicorn/examples/nginx.conf
+# https://yhbt.net/unicorn/examples/nginx.conf
 #
 # See the link:/TUNING.html document for more information on tuning unicorn.
 class Unicorn::Configurator
@@ -88,6 +88,9 @@ class Unicorn::Configurator
 
     RACKUP[:set_listener] and
       set[:listeners] << "#{RACKUP[:host]}:#{RACKUP[:port]}"
+
+    RACKUP[:no_default_middleware] and
+      set[:default_middleware] = false
 
     # unicorn_rails creates dirs here after working_directory is bound
     after_reload.call if after_reload
@@ -259,7 +262,7 @@ class Unicorn::Configurator
   #      server 192.168.0.9:8080 fail_timeout=0;
   #    }
   #
-  # See http://nginx.org/en/docs/http/ngx_http_upstream_module.html
+  # See https://nginx.org/en/docs/http/ngx_http_upstream_module.html
   # for more details on nginx upstream configuration.
   def timeout(seconds)
     set_int(:timeout, seconds, 3)
@@ -287,6 +290,14 @@ class Unicorn::Configurator
   # for more information.
   def worker_processes(nr)
     set_int(:worker_processes, nr, 1)
+  end
+
+  # sets whether to add default middleware in the development and
+  # deployment RACK_ENVs.
+  #
+  # default_middleware is only available in unicorn 5.5.0+
+  def default_middleware(bool)
+    set_bool(:default_middleware, bool)
   end
 
   # sets listeners to the given +addresses+, replacing or augmenting the
@@ -611,7 +622,7 @@ class Unicorn::Configurator
     # just let chdir raise errors
     path = File.expand_path(path)
     if config_file &&
-       config_file[0] != ?/ &&
+       ! config_file.start_with?('/') &&
        ! File.readable?("#{path}/#{config_file}")
       raise ArgumentError,
             "config_file=#{config_file} would not be accessible in" \

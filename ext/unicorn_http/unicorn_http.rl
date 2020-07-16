@@ -13,7 +13,7 @@
 #include "global_variables.h"
 #include "c_util.h"
 
-void init_unicorn_httpdate(VALUE mark_ary);
+void init_unicorn_httpdate(void);
 
 #define UH_FL_CHUNKED  0x1
 #define UH_FL_HASBODY  0x2
@@ -26,6 +26,7 @@ void init_unicorn_httpdate(VALUE mark_ary);
 #define UH_FL_HASHEADER 0x100
 #define UH_FL_TO_CLEAR 0x200
 #define UH_FL_RESSTART 0x400 /* for check_client_connection */
+#define UH_FL_HIJACK 0x800
 
 /* all of these flags need to be set for keepalive to be supported */
 #define UH_FL_KEEPALIVE (UH_FL_KAVERSION | UH_FL_REQEOF | UH_FL_HASHEADER)
@@ -61,7 +62,8 @@ struct http_parser {
   } len;
 };
 
-static ID id_set_backtrace;
+static ID id_set_backtrace, id_is_chunked_p;
+static VALUE cHttpParser;
 
 #ifdef HAVE_RB_HASH_CLEAR /* Ruby >= 2.0 */
 #  define my_hash_clear(h) (void)rb_hash_clear(h)
@@ -219,6 +221,19 @@ static void write_cont_value(struct http_parser *hp,
   rb_str_buf_cat(hp->cont, vptr, end + 1);
 }
 
+static int is_chunked(VALUE v)
+{
+  /* common case first */
+  if (STR_CSTR_CASE_EQ(v, "chunked"))
+    return 1;
+
+  /*
+   * call Ruby function in unicorn/http_request.rb to deal with unlikely
+   * comma-delimited case
+   */
+  return rb_funcall(cHttpParser, id_is_chunked_p, 1, v) != Qfalse;
+}
+
 static void write_value(struct http_parser *hp,
                         const char *buffer, const char *p)
 {
@@ -245,7 +260,9 @@ static void write_value(struct http_parser *hp,
     f = uncommon_field(field, flen);
   } else if (f == g_http_connection) {
     hp_keepalive_connection(hp, v);
-  } else if (f == g_content_length) {
+  } else if (f == g_content_length && !HP_FL_TEST(hp, CHUNKED)) {
+    if (hp->len.content)
+      parser_raise(eHttpParserError, "Content-Length already set");
     hp->len.content = parse_length(RSTRING_PTR(v), RSTRING_LEN(v));
     if (hp->len.content < 0)
       parser_raise(eHttpParserError, "invalid Content-Length");
@@ -253,9 +270,30 @@ static void write_value(struct http_parser *hp,
       HP_FL_SET(hp, HASBODY);
     hp_invalid_if_trailer(hp);
   } else if (f == g_http_transfer_encoding) {
-    if (STR_CSTR_CASE_EQ(v, "chunked")) {
+    if (is_chunked(v)) {
+      if (HP_FL_TEST(hp, CHUNKED))
+        /*
+         * RFC 7230 3.3.1:
+         * A sender MUST NOT apply chunked more than once to a message body
+         * (i.e., chunking an already chunked message is not allowed).
+         */
+        parser_raise(eHttpParserError, "Transfer-Encoding double chunked");
+
       HP_FL_SET(hp, CHUNKED);
       HP_FL_SET(hp, HASBODY);
+
+      /* RFC 7230 3.3.3, 3: favor chunked if Content-Length exists */
+      hp->len.content = 0;
+    } else if (HP_FL_TEST(hp, CHUNKED)) {
+      /*
+       * RFC 7230 3.3.3, point 3 states:
+       * If a Transfer-Encoding header field is present in a request and
+       * the chunked transfer coding is not the final encoding, the
+       * message body length cannot be determined reliably; the server
+       * MUST respond with the 400 (Bad Request) status code and then
+       * close the connection.
+       */
+      parser_raise(eHttpParserError, "invalid Transfer-Encoding");
     }
     hp_invalid_if_trailer(hp);
   } else if (f == g_http_trailer) {
@@ -486,7 +524,7 @@ static void set_url_scheme(VALUE env, VALUE *server_port)
      * and X-Forwarded-Proto handling from this parser?  We've had it
      * forever and nobody has said anything against it, either.
      * Anyways, please send comments to our public mailing list:
-     * unicorn-public@bogomips.org (no HTML mail, no subscription necessary)
+     * unicorn-public@yhbt.net (no HTML mail, no subscription necessary)
      */
     scheme = rb_hash_aref(env, g_http_x_forwarded_ssl);
     if (!NIL_P(scheme) && STR_CSTR_EQ(scheme, "on")) {
@@ -606,6 +644,10 @@ static VALUE HttpParser_init(VALUE self)
 static VALUE HttpParser_clear(VALUE self)
 {
   struct http_parser *hp = data_get(self);
+
+  /* we can't safely reuse .buf and .env if hijacked */
+  if (HP_FL_TEST(hp, HIJACK))
+    return HttpParser_init(self);
 
   http_parser_init(hp);
   my_hash_clear(hp->env);
@@ -813,6 +855,15 @@ static VALUE HttpParser_env(VALUE self)
   return data_get(self)->env;
 }
 
+static VALUE HttpParser_hijacked_bang(VALUE self)
+{
+  struct http_parser *hp = data_get(self);
+
+  HP_FL_SET(hp, HIJACK);
+
+  return self;
+}
+
 /**
  * call-seq:
  *    parser.filter_body(dst, src) => nil/src
@@ -917,10 +968,8 @@ static VALUE HttpParser_rssget(VALUE self)
 
 void Init_unicorn_http(void)
 {
-  static VALUE mark_ary;
-  VALUE mUnicorn, cHttpParser;
+  VALUE mUnicorn;
 
-  mark_ary = rb_ary_new();
   mUnicorn = rb_define_module("Unicorn");
   cHttpParser = rb_define_class_under(mUnicorn, "HttpParser", rb_cObject);
   eHttpParserError =
@@ -930,7 +979,7 @@ void Init_unicorn_http(void)
   e414 = rb_define_class_under(mUnicorn, "RequestURITooLongError",
                                eHttpParserError);
 
-  init_globals(mark_ary);
+  init_globals();
   rb_define_alloc_func(cHttpParser, HttpParser_alloc);
   rb_define_method(cHttpParser, "initialize", HttpParser_init, 0);
   rb_define_method(cHttpParser, "clear", HttpParser_clear, 0);
@@ -946,6 +995,7 @@ void Init_unicorn_http(void)
   rb_define_method(cHttpParser, "next?", HttpParser_next, 0);
   rb_define_method(cHttpParser, "buf", HttpParser_buf, 0);
   rb_define_method(cHttpParser, "env", HttpParser_env, 0);
+  rb_define_method(cHttpParser, "hijacked!", HttpParser_hijacked_bang, 0);
   rb_define_method(cHttpParser, "response_start_sent=", HttpParser_rssset, 1);
   rb_define_method(cHttpParser, "response_start_sent", HttpParser_rssget, 0);
 
@@ -966,20 +1016,18 @@ void Init_unicorn_http(void)
 
   rb_define_singleton_method(cHttpParser, "max_header_len=", set_maxhdrlen, 1);
 
-  init_common_fields(mark_ary);
+  init_common_fields();
   SET_GLOBAL(g_http_host, "HOST");
   SET_GLOBAL(g_http_trailer, "TRAILER");
   SET_GLOBAL(g_http_transfer_encoding, "TRANSFER_ENCODING");
   SET_GLOBAL(g_content_length, "CONTENT_LENGTH");
   SET_GLOBAL(g_http_connection, "CONNECTION");
   id_set_backtrace = rb_intern("set_backtrace");
-  init_unicorn_httpdate(mark_ary);
-
-  OBJ_FREEZE(mark_ary);
-  rb_global_variable(&mark_ary);
+  init_unicorn_httpdate();
 
 #ifndef HAVE_RB_HASH_CLEAR
   id_clear = rb_intern("clear");
 #endif
+  id_is_chunked_p = rb_intern("is_chunked?");
 }
 #undef SET_GLOBAL

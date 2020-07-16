@@ -11,8 +11,8 @@ module Unicorn::Util # :nodoc:
       fp.stat.file? &&
       fp.sync &&
       (fp.fcntl(Fcntl::F_GETFL) & append_flags) == append_flags
-    rescue IOError, Errno::EBADF
-      false
+  rescue IOError, Errno::EBADF
+    false
   end
 
   def self.chown_logs(uid, gid)
@@ -64,7 +64,7 @@ module Unicorn::Util # :nodoc:
           fp.reopen(fp.path, "a")
         else
           # We should not need this workaround, Ruby can be fixed:
-          #    http://bugs.ruby-lang.org/issues/9036
+          #    https://bugs.ruby-lang.org/issues/9036
           # MRI will not call call fclose(3) or freopen(3) here
           # since there's no associated std{in,out,err} FILE * pointer
           # This should atomically use dup3(2) (or dup2(2)) syscall

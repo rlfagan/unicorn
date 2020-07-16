@@ -83,6 +83,7 @@ module Unicorn
         rescue => e
           logger.error("#{sock_name(sock)} " \
                        "failed to set accept_filter=#{name} (#{e.inspect})")
+          logger.error("perhaps accf_http(9) needs to be loaded".freeze)
         end if arg != got
       end
     end
@@ -100,8 +101,8 @@ module Unicorn
         log_buffer_sizes(sock, " after: ")
       end
       sock.listen(opt[:backlog])
-      rescue => e
-        Unicorn.log_error(logger, "#{sock_name(sock)} #{opt.inspect}", e)
+    rescue => e
+      Unicorn.log_error(logger, "#{sock_name(sock)} #{opt.inspect}", e)
     end
 
     def log_buffer_sizes(sock, pfx = '')
@@ -116,7 +117,7 @@ module Unicorn
     def bind_listen(address = '0.0.0.0:8080', opt = {})
       return address unless String === address
 
-      sock = if address[0] == ?/
+      sock = if address.start_with?('/')
         if File.exist?(address)
           if File.socket?(address)
             begin

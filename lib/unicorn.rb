@@ -2,6 +2,8 @@
 require 'etc'
 require 'stringio'
 require 'kgio'
+require 'raindrops'
+require 'io/wait'
 
 begin
   require 'rack'
@@ -43,12 +45,8 @@ module Unicorn
       abort "rack and Rack::Builder must be available for processing #{ru}"
     end
 
-    # Op is going to get cleared before the returned lambda is called, so
-    # save this value so that it's still there when we need it:
-    no_default_middleware = op[:no_default_middleware]
-
     # always called after config file parsing, may be called after forking
-    lambda do ||
+    lambda do |_, server|
       inner_app = case ru
       when /\.ru$/
         raw = File.read(ru)
@@ -59,9 +57,12 @@ module Unicorn
         Object.const_get(File.basename(ru, '.rb').capitalize)
       end
 
-      pp({ :inner_app => inner_app }) if $DEBUG
+      if $DEBUG
+        require 'pp'
+        pp({ :inner_app => inner_app })
+      end
 
-      return inner_app if no_default_middleware
+      return inner_app unless server.default_middleware
 
       middleware = { # order matters
         ContentLength: nil,
@@ -95,7 +96,7 @@ module Unicorn
 
   # returns an array of strings representing TCP listen socket addresses
   # and Unix domain socket paths.  This is useful for use with
-  # Raindrops::Middleware under Linux: https://bogomips.org/raindrops/
+  # Raindrops::Middleware under Linux: https://yhbt.net/raindrops/
   def self.listener_names
     Unicorn::HttpServer::LISTENERS.map do |io|
       Unicorn::SocketHelper.sock_name(io)
@@ -109,9 +110,25 @@ module Unicorn
     exc.backtrace.each { |line| logger.error(line) }
   end
 
-  # remove this when we only support Ruby >= 2.0
+  F_SETPIPE_SZ = 1031 if RUBY_PLATFORM =~ /linux/
+
   def self.pipe # :nodoc:
-    Kgio::Pipe.new.each { |io| io.close_on_exec = true }
+    Kgio::Pipe.new.each do |io|
+      io.close_on_exec = true  # remove this when we only support Ruby >= 2.0
+
+      # shrink pipes to minimize impact on /proc/sys/fs/pipe-user-pages-soft
+      # limits.
+      if defined?(F_SETPIPE_SZ)
+        begin
+          io.fcntl(F_SETPIPE_SZ, Raindrops::PAGE_SIZE)
+        rescue Errno::EINVAL
+          # old kernel
+        rescue Errno::EPERM
+          # resizes fail if Linux is close to the pipe limit for the user
+          # or if the user does not have permissions to resize
+        end
+      end
+    end
   end
   # :startdoc:
 end

@@ -2,7 +2,6 @@
 # :enddoc:
 # no stable API here
 require 'unicorn_http'
-require 'raindrops'
 
 # TODO: remove redundant names
 Unicorn.const_set(:HttpRequest, Unicorn::HttpParser)
@@ -66,7 +65,7 @@ class Unicorn::HttpParser
     clear
     e = env
 
-    # From http://www.ietf.org/rfc/rfc3875:
+    # From https://www.ietf.org/rfc/rfc3875:
     # "Script authors should be aware that the REMOTE_ADDR and
     #  REMOTE_HOST meta-variables (see sections 4.1.8 and 4.1.9)
     #  may not identify the ultimate source of the request.  They
@@ -98,6 +97,7 @@ class Unicorn::HttpParser
   # for rack.hijack, we respond to this method so no extra allocation
   # of a proc object
   def call
+    hijacked!
     env['rack.hijack_io'] = env['unicorn.socket']
   end
 
@@ -187,5 +187,16 @@ class Unicorn::HttpParser
       self.response_start_sent = true
       HTTP_RESPONSE_START.each { |c| socket.write(c) }
     end
+  end
+
+  # called by ext/unicorn_http/unicorn_http.rl via rb_funcall
+  def self.is_chunked?(v) # :nodoc:
+    vals = v.split(/[ \t]*,[ \t]*/).map!(&:downcase)
+    if vals.pop == 'chunked'.freeze
+      return true unless vals.include?('chunked'.freeze)
+      raise Unicorn::HttpParserError, 'double chunked', []
+    end
+    return false unless vals.include?('chunked'.freeze)
+    raise Unicorn::HttpParserError, 'chunked not last', []
   end
 end

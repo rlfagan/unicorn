@@ -7,7 +7,7 @@ require 'set'
 # forked worker children.
 #
 # Users do not need to know the internals of this class, but reading the
-# {source}[https://bogomips.org/unicorn.git/tree/lib/unicorn/http_server.rb]
+# {source}[https://yhbt.net/unicorn.git/tree/lib/unicorn/http_server.rb]
 # is education for programmers wishing to learn how unicorn works.
 # See Unicorn::Configurator for information on how to configure unicorn.
 class Unicorn::HttpServer
@@ -16,9 +16,10 @@ class Unicorn::HttpServer
                 :before_fork, :after_fork, :before_exec,
                 :listener_opts, :preload_app,
                 :orig_app, :config, :ready_pipe, :user,
-                :before_murder
+                :before_murder,
+                :default_middleware
 
-  attr_writer   :after_worker_exit, :after_worker_ready
+  attr_writer   :after_worker_exit, :after_worker_ready, :worker_exec
 
   attr_reader :pid, :logger
   include Unicorn::SocketHelper
@@ -73,6 +74,7 @@ class Unicorn::HttpServer
     @app = app
     @request = Unicorn::HttpRequest.new
     @reexec_pid = 0
+    @default_middleware = true
     options = options.dup
     @ready_pipe = options.delete(:ready_pipe)
     @init_listeners = options[:listeners] ? options[:listeners].dup : []
@@ -85,7 +87,7 @@ class Unicorn::HttpServer
     # * The master process never closes or reinitializes this once
     # initialized.  Signal handlers in the master process will write to
     # it to wake up the master from IO.select in exactly the same manner
-    # djb describes in http://cr.yp.to/docs/selfpipe.html
+    # djb describes in https://cr.yp.to/docs/selfpipe.html
     #
     # * The workers immediately close the pipe they inherit.  See the
     # Unicorn::Worker class for the pipe workers use.
@@ -152,7 +154,7 @@ class Unicorn::HttpServer
   def listeners=(listeners)
     cur_names, dead_names = [], []
     listener_names.each do |name|
-      if ?/ == name[0]
+      if name.start_with?('/')
         # mark unlinked sockets as dead so we can rebind them
         (File.socket?(name) ? cur_names : dead_names) << name
       else
@@ -384,7 +386,7 @@ class Unicorn::HttpServer
 
   # wait for a signal hander to wake us up and then consume the pipe
   def master_sleep(sec)
-    @self_pipe[0].kgio_wait_readable(sec) or return
+    @self_pipe[0].wait(sec) or return
     # 11 bytes is the maximum string length which can be embedded within
     # the Ruby itself and not require a separate malloc (on 32-bit MRI 1.9+).
     # Most reads are only one byte here and uncommon, so it's not worth a
@@ -527,9 +529,6 @@ class Unicorn::HttpServer
     Unicorn::Configurator::RACKUP.clear
     @ready_pipe = @init_listeners = @before_exec = @before_fork = nil
 
-    # http://blade.nagaokaut.ac.jp/cgi-bin/scat.rb/ruby/ruby-core/36450
-    srand # remove in unicorn 6
-
     # The OpenSSL PRNG is seeded with only the pid, and apps with frequently
     # dying workers can recycle pids
     OpenSSL::Random.seed(rand.to_s) if defined?(OpenSSL::Random)
@@ -560,9 +559,9 @@ class Unicorn::HttpServer
       @workers[pid] = worker
       worker.atfork_parent
     end
-    rescue => e
-      @logger.error(e) rescue nil
-      exit!
+  rescue => e
+    @logger.error(e) rescue nil
+    exit!
   end
 
   def maintain_worker_count
@@ -594,7 +593,7 @@ class Unicorn::HttpServer
       client.kgio_trywrite(err_response(code, @request.response_start_sent))
     end
     client.close
-    rescue
+  rescue
   end
 
   def e100_response_write(client, env)
@@ -622,8 +621,7 @@ class Unicorn::HttpServer
         return if @request.hijacked?
       end
       @request.headers? or headers = nil
-      http_response_write(client, status, headers, body,
-                          @request.response_start_sent)
+      http_response_write(client, status, headers, body, @request)
     ensure
       body.respond_to?(:close) and body.close
     end
@@ -678,9 +676,9 @@ class Unicorn::HttpServer
     logger.info "worker=#{worker_nr} reopening logs..."
     Unicorn::Util.reopen_logs
     logger.info "worker=#{worker_nr} done reopening logs"
-    rescue => e
-      logger.error(e) rescue nil
-      exit!(77) # EX_NOPERM in sysexits.h
+  rescue => e
+    logger.error(e) rescue nil
+    exit!(77) # EX_NOPERM in sysexits.h
   end
 
   # runs inside each forked worker, this sits around and waits
@@ -696,6 +694,7 @@ class Unicorn::HttpServer
     trap(:USR1) { nr = -65536 }
 
     ready = readers.dup
+    nr_listeners = readers.size
     @after_worker_ready.call(self, worker)
 
     begin
@@ -718,7 +717,7 @@ class Unicorn::HttpServer
       # we're probably reasonably busy, so avoid calling select()
       # and do a speculative non-blocking accept() on ready listeners
       # before we sleep again in select().
-      unless nr == 0
+      if nr == nr_listeners
         tmp = ready.dup
         redo
       end
@@ -767,11 +766,11 @@ class Unicorn::HttpServer
     wpid <= 0 and return
     Process.kill(0, wpid)
     wpid
-    rescue Errno::EPERM
-      logger.info "pid=#{path} possibly stale, got EPERM signalling PID:#{wpid}"
-      nil
-    rescue Errno::ESRCH, Errno::ENOENT
-      # don't unlink stale pid files, racy without non-portable locking...
+  rescue Errno::EPERM
+    logger.info "pid=#{path} possibly stale, got EPERM signalling PID:#{wpid}"
+    nil
+  rescue Errno::ESRCH, Errno::ENOENT
+    # don't unlink stale pid files, racy without non-portable locking...
   end
 
   def load_config!
@@ -797,12 +796,12 @@ class Unicorn::HttpServer
   end
 
   def build_app!
-    if app.respond_to?(:arity) && app.arity == 0
+    if app.respond_to?(:arity) && (app.arity == 0 || app.arity == 2)
       if defined?(Gem) && Gem.respond_to?(:refresh)
         logger.info "Refreshing Gem list"
         Gem.refresh
       end
-      self.app = app.call
+      self.app = app.arity == 0 ? app.call : app.call(nil, self)
     end
   end
 

@@ -150,13 +150,23 @@ prep_setup_rb := @-$(RM) $(setup_rb_files);$(MAKE) -C $(ext) clean
 
 clean:
 	-$(MAKE) -C $(ext) clean
-	-$(MAKE) -C Documentation clean
 	$(RM) $(ext)/Makefile
 	$(RM) $(setup_rb_files) $(t_log)
 	$(RM) -r $(test_prefix) man
+	$(RM) $(man1) $(html1)
 
-man html:
-	$(MAKE) -C Documentation install-$@
+man1 := $(addprefix Documentation/, unicorn.1 unicorn_rails.1)
+html1 := $(addsuffix .html, $(man1))
+man :
+	mkdir -p man/man1
+	install -m 644 $(man1) man/man1
+
+html : $(html1)
+	mkdir -p doc/man1
+	install -m 644 $(html1) doc/man1
+
+%.1.html: %.1
+	$(OLDDOC) man2html -o $@ ./$<
 
 pkg_extra := GIT-VERSION-FILE lib/unicorn/version.rb LATEST NEWS \
              $(ext)/unicorn_http.c $(man1_paths)
@@ -175,7 +185,7 @@ doc: .document $(ext)/unicorn_http.c man html .olddoc.yml $(PLACEHOLDERS)
 	find bin lib -type f -name '*.rbc' -exec rm -f '{}' ';'
 	$(RM) -r doc
 	$(OLDDOC) prepare
-	$(RDOC) -f oldweb
+	$(RDOC) -f dark216
 	$(OLDDOC) merge
 	install -m644 COPYING doc/COPYING
 	install -m644 NEWS.atom.xml doc/NEWS.atom.xml
@@ -183,13 +193,13 @@ doc: .document $(ext)/unicorn_http.c man html .olddoc.yml $(PLACEHOLDERS)
 	install -m644 $(man1_paths) doc/
 	tar cf - $$(git ls-files examples/) | (cd doc && tar xf -)
 
-# publishes docs to https://bogomips.org/unicorn/
+# publishes docs to https://yhbt.net/unicorn/
 publish_doc:
 	-git set-file-times
 	$(MAKE) doc
 	$(MAKE) doc_gz
 	chmod 644 $$(find doc -type f)
-	$(RSYNC) -av doc/ bogomips.org:/srv/bogomips/unicorn/
+	$(RSYNC) -av doc/ yhbt.net:/srv/yhbt/unicorn/
 	git ls-files | xargs touch
 
 # Create gzip variants of the same timestamp as the original so nginx
@@ -248,6 +258,11 @@ endif
 
 $(PLACEHOLDERS):
 	echo olddoc_placeholder > $@
+
+check-warnings:
+	@(for i in $$(git ls-files '*.rb' bin | grep -v '^setup\.rb$$'); \
+	  do $(RUBY) --disable-gems -d -W2 -c \
+	  $$i; done) | grep -v '^Syntax OK$$' || :
 
 .PHONY: .FORCE-GIT-VERSION-FILE doc $(T) $(slow_tests) man
 .PHONY: test-install
