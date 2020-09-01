@@ -28,7 +28,7 @@ Gem::Specification.new do |s|
   # technically we need ">= 1.9.3", too, but avoid the array here since
   # old rubygems versions (1.8.23.2 at least) do not support multiple
   # version requirements here.
-  s.required_ruby_version = '< 3.0'
+  s.required_ruby_version = '< 4.0'
 
   # We do not have a hard dependency on rack, it's possible to load
   # things which respond to #call.  HTTP status lines in responses
