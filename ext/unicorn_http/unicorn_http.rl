@@ -966,7 +966,7 @@ static VALUE HttpParser_rssget(VALUE self)
   assert(!NIL_P(var) && "missed global field"); \
 } while (0)
 
-void Init_unicorn_http(void)
+void Init_unicorn_http()
 {
   VALUE mUnicorn;
 
