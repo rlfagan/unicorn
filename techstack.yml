@@ -1,0 +1,145 @@
+repo_name: rlfagan/unicorn
+report_id: 5515e2d5544f9e2df799a19e5dcb5236
+version: 0.1
+repo_type: Public
+timestamp: '2024-06-20T23:02:52+00:00'
+requested_by: byroot
+provider: github
+branch: master
+detected_tools_count: 11
+tools:
+- name: C lang
+  description: One of the most widely used programming languages of all time
+  website_url: http://en.wikipedia.org/wiki/C_(programming_language)
+  open_source: true
+  hosted_saas: false
+  category: Languages & Frameworks
+  sub_category: Languages
+  image_url: https://img.stackshare.io/no-img-open-source.png
+  detection_source_url: https://github.com/rlfagan/unicorn
+  detection_source: Repo Metadata
+- name: Perl
+  description: Highly capable, feature-rich programming language with over 26 years
+    of development
+  website_url: http://www.perl.org/
+  open_source: true
+  hosted_saas: false
+  category: Languages & Frameworks
+  sub_category: Languages
+  image_url: https://img.stackshare.io/service/1048/perl.png
+  detection_source_url: https://github.com/rlfagan/unicorn
+  detection_source: Repo Metadata
+- name: Ruby
+  description: A dynamic, interpreted, open source programming language with a focus
+    on simplicity and productivity
+  website_url: https://www.ruby-lang.org
+  open_source: true
+  hosted_saas: false
+  category: Languages & Frameworks
+  sub_category: Languages
+  image_url: https://img.stackshare.io/service/989/ruby.png
+  detection_source_url: https://github.com/rlfagan/unicorn
+  detection_source: Repo Metadata
+- name: Git
+  description: Fast, scalable, distributed revision control system
+  website_url: http://git-scm.com/
+  open_source: true
+  hosted_saas: false
+  category: Build, Test, Deploy
+  sub_category: Version Control System
+  image_url: https://img.stackshare.io/service/1046/git.png
+  detection_source_url: https://github.com/rlfagan/unicorn
+  detection_source: Repo Metadata
+- name: NGINX
+  description: A high performance free open source web server powering busiest sites
+    on the Internet.
+  website_url: http://nginx.org
+  open_source: false
+  hosted_saas: false
+  category: Application Hosting
+  sub_category: Web Servers
+  image_url: https://img.stackshare.io/service/1052/YMxUfyWf.png
+  detection_source_url: https://github.com/rlfagan/unicorn/blob/master/examples/nginx.conf
+  detection_source: examples/nginx.conf
+  last_updated_by: Eric Wong
+  last_updated_on: 2009-11-24 06:28:05.000000000 Z
+- name: RubyGems
+  description: Easily download, install, and use ruby software packages on your system
+  website_url: https://rubygems.org/
+  open_source: false
+  hosted_saas: false
+  category: Build, Test, Deploy
+  sub_category: Package Managers
+  image_url: https://img.stackshare.io/service/12795/5jL6-BA5_400x400.jpeg
+  detection_source_url: https://github.com/rlfagan/unicorn/blob/master/unicorn.gemspec
+  detection_source: unicorn.gemspec
+  last_updated_by: Eric Wong
+  last_updated_on: 2015-11-01 08:29:56.000000000 Z
+- name: Shell
+  description: A shell is a text-based terminal, used for manipulating programs and
+    files. Shell scripts typically manage program execution.
+  website_url: https://en.wikipedia.org/wiki/Shell_script
+  open_source: false
+  hosted_saas: false
+  category: Languages & Frameworks
+  sub_category: Languages
+  image_url: https://img.stackshare.io/service/4631/default_c2062d40130562bdc836c13dbca02d318205a962.png
+  detection_source_url: https://github.com/rlfagan/unicorn
+  detection_source: Repo Metadata
+- name: kgio
+  description: This is a legacy project, do not use it for new projects
+  package_url: https://rubygems.org/kgio
+  version: '2.6'
+  license: LGPL-2.1+
+  open_source: true
+  hosted_saas: false
+  category: Libraries
+  sub_category: RubyGems Packages
+  image_url: https://img.stackshare.io/package/rubygems/image.png
+  detection_source_url: https://github.com/rlfagan/unicorn/blob/master/unicorn.gemspec
+  detection_source: unicorn.gemspec
+  last_updated_by: Eric Wong
+  last_updated_on: 2011-12-05 01:26:39.000000000 Z
+- name: rack
+  description: Rack provides a minimal, modular and adaptable interface for developing
+    web applications in Ruby
+  package_url: https://rubygems.org/rack
+  license: MIT
+  open_source: true
+  hosted_saas: false
+  category: Libraries
+  sub_category: RubyGems Packages
+  image_url: https://img.stackshare.io/package/18839/default_db5cfb0d85d9fd8bfb40a863581417a2a57791ab.png
+  detection_source_url: https://github.com/rlfagan/unicorn/blob/master/unicorn.gemspec
+  detection_source: unicorn.gemspec
+  last_updated_by: Eric Wong
+  last_updated_on: 2016-01-27 00:08:19.000000000 Z
+- name: raindrops
+  description: Raindrops is a real-time stats toolkit to show statistics for Rack
+    HTTP servers
+  package_url: https://rubygems.org/raindrops
+  version: '0.7'
+  license: LGPL-2.1+
+  open_source: true
+  hosted_saas: false
+  category: Libraries
+  sub_category: RubyGems Packages
+  image_url: https://img.stackshare.io/package/rubygems/image.png
+  detection_source_url: https://github.com/rlfagan/unicorn/blob/master/unicorn.gemspec
+  detection_source: unicorn.gemspec
+  last_updated_by: Eric Wong
+  last_updated_on: 2011-12-05 01:26:39.000000000 Z
+- name: test-unit
+  description: Test-unit
+  package_url: https://rubygems.org/test-unit
+  version: '3.0'
+  license: Ruby,Python-2.0
+  open_source: true
+  hosted_saas: false
+  category: Libraries
+  sub_category: RubyGems Packages
+  image_url: https://img.stackshare.io/package/18844/default_1c2935fa69cec14d38adad302e002464101cd71f.png
+  detection_source_url: https://github.com/rlfagan/unicorn/blob/master/unicorn.gemspec
+  detection_source: unicorn.gemspec
+  last_updated_by: Eric Wong
+  last_updated_on: 2014-08-17 02:33:54.000000000 Z
